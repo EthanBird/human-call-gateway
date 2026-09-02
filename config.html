@@ -466,7 +466,7 @@
                             <label>Headers (可选, JSON 格式)</label>
                             <textarea rows="3"
                                       onchange="updateChannel('${channel.id}', 'config.headers', this.value)"
-                                      placeholder='{"Authorization": "Bearer ${API_TOKEN}"}'>${channel.config.headers || ''}</textarea>
+                                      placeholder='{"Authorization": "Bearer \${API_TOKEN}"}'>${channel.config.headers || ''}</textarea>
                             <div class="hint">JSON 对象,值可使用 \${ENV_VAR} 占位符</div>
                         </div>
                         <div class="form-group">
