@@ -13,13 +13,6 @@
       "type": "string",
       "description": "Default channel to use when channel_id is omitted from the request. Must match an existing channel id."
     },
-    "timeout_ms": {
-      "type": "integer",
-      "description": "HTTP client timeout in milliseconds. Default: 10000 (10 seconds).",
-      "default": 10000,
-      "minimum": 1,
-      "maximum": 10000
-    },
     "channels": {
       "type": "array",
       "description": "List of configured notification channels. Each channel must have a unique id.",

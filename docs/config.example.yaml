@@ -3,7 +3,6 @@
 # All secrets are referenced via environment variable names, never literal values.
 
 default_channel_id: "generic-webhook"
-timeout_ms: 10000
 
 channels:
   # Slack: uses Incoming Webhook

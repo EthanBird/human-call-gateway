@@ -23,7 +23,7 @@ paths:
         Returns immediately after the transport accepts or rejects the send.
         Does not wait for human response or retry on failure.
         
-        The urgent field is forwarded as-is to the channel mapper body and does not affect timeout, retry behavior, or queue order.
+        The urgent field (optional boolean, default false) is forwarded as-is into the channel mapper body and does not change timeout (still 10s), does not retry, and does not reorder.
       operationId: sendHumanCall
       requestBody:
         required: true
@@ -179,8 +179,7 @@ components:
         urgent:
           type: boolean
           description: |
-            Only set when work is actually stopped; forwarded as-is to the channel mapper body and does not affect timeout, retry, or queue order.
-            Default: false
+            Optional boolean, default false; forwarded as-is into the channel mapper body and does not change timeout (still 10s), does not retry, and does not reorder.
           default: false
           example: true
     
@@ -233,7 +232,7 @@ components:
                 - INVALID_PAYLOAD: missing/empty/too-long fields, unknown JSON keys, wrong types (400)
                 - CONFIG_MISSING: channel_id does not match any channels[].id, OR resolved channel has enabled:false, OR channel_id omitted and default_channel_id is unset/empty/unknown, OR required secret-env for the channel type is unset/empty in the process environment (400). error.message must name which channel id, that it is disabled, that default is missing, or which env var name is missing; never echo the secret value.
                 - TRANSPORT_ERROR: upstream non-success (4xx/5xx from Slack/Telegram/etc.) or malformed transport response (502)
-                - TIMEOUT: shared HTTP client exceeded 10s (504)
+                - TIMEOUT: transport timeout is hardcoded 10s (not configurable); returned when the shared HTTP client exceeds this fixed limit (504)
               enum:
                 - INVALID_PAYLOAD
                 - CONFIG_MISSING
