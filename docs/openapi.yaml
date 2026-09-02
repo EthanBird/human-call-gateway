@@ -22,6 +22,8 @@ paths:
         
         Returns immediately after the transport accepts or rejects the send.
         Does not wait for human response or retry on failure.
+        
+        The urgent field is forwarded as-is to the channel mapper body and does not affect timeout, retry behavior, or queue order.
       operationId: sendHumanCall
       requestBody:
         required: true
@@ -83,13 +85,27 @@ paths:
                     error:
                       code: INVALID_PAYLOAD
                       message: "Field 'need' is required and must be non-empty"
-                config_missing:
+                config_missing_not_found:
                   summary: Channel not configured
                   value:
                     sent: false
                     error:
                       code: CONFIG_MISSING
                       message: "Channel 'prod-alerts' not found in configuration"
+                config_missing_disabled:
+                  summary: Channel exists but disabled
+                  value:
+                    sent: false
+                    error:
+                      code: CONFIG_MISSING
+                      message: "Channel 'maintenance-alerts' is disabled"
+                config_missing_env:
+                  summary: Required secret-env missing
+                  value:
+                    sent: false
+                    error:
+                      code: CONFIG_MISSING
+                      message: "Environment variable SLACK_WEBHOOK_URL required for channel 'slack-ops' is not set"
         '502':
           description: Transport error (upstream failure)
           content:
@@ -163,7 +179,7 @@ components:
         urgent:
           type: boolean
           description: |
-            Only set when work is actually stopped.
+            Only set when work is actually stopped; forwarded as-is to the channel mapper body and does not affect timeout, retry, or queue order.
             Default: false
           default: false
           example: true
@@ -178,8 +194,8 @@ components:
         sent:
           type: boolean
           description: |
-            Always true for 200 responses.
-            Means the transport accepted the send, not that a human read it.
+            Always true for 200 responses; means the transport accepted the send, not that a human read it.
+            No human_result field exists on any response schema.
           enum:
             - true
           example: true
@@ -215,7 +231,7 @@ components:
               description: |
                 Error code:
                 - INVALID_PAYLOAD: missing/empty/too-long fields, unknown JSON keys, wrong types (400)
-                - CONFIG_MISSING: channel_id unknown, default_channel_id unset when channel_id omitted, channel disabled, type missing required config/secret env (400)
+                - CONFIG_MISSING: channel_id does not match any channels[].id, OR resolved channel has enabled:false, OR channel_id omitted and default_channel_id is unset/empty/unknown, OR required secret-env for the channel type is unset/empty in the process environment (400). error.message must name which channel id, that it is disabled, that default is missing, or which env var name is missing; never echo the secret value.
                 - TRANSPORT_ERROR: upstream non-success (4xx/5xx from Slack/Telegram/etc.) or malformed transport response (502)
                 - TIMEOUT: shared HTTP client exceeded 10s (504)
               enum:
