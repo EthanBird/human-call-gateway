@@ -14,6 +14,50 @@ servers:
     description: v1 API
 
 paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: |
+        Returns the service health status. This endpoint is always accessible without authentication,
+        even when GATEWAY_TOKEN is configured. Suitable for container orchestration health checks.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                    example: ok
+  /:
+    get:
+      summary: Root health check endpoint
+      description: |
+        Alternative health check endpoint at the root path. Returns the same response as /health.
+        Always accessible without authentication.
+      operationId: rootHealthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - ok
+                    example: ok
   /human-call:
     post:
       summary: Send a human call message
@@ -24,7 +68,14 @@ paths:
         Does not wait for human response or retry on failure.
         
         The urgent field (optional boolean, default false) is forwarded as-is into the channel mapper body and does not change timeout (still 10s), does not retry, and does not reorder.
+        
+        **Authentication**: If the GATEWAY_TOKEN environment variable is set, this endpoint requires
+        a valid Bearer token in the Authorization header. Health check endpoints (/health and /)
+        never require authentication.
       operationId: sendHumanCall
+      security:
+        - BearerAuth: []
+        - {} # Optional - no auth required if GATEWAY_TOKEN is not set
       requestBody:
         required: true
         content:
@@ -71,6 +122,20 @@ paths:
                   value:
                     sent: true
                     id: "gw-20260902-074100-abc123"
+        '401':
+          description: Unauthorized (GATEWAY_TOKEN configured but missing or invalid)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: Missing or invalid Bearer token
+                  value:
+                    sent: false
+                    error:
+                      code: INVALID_PAYLOAD
+                      message: "Unauthorized"
         '400':
           description: Invalid payload or missing configuration
           content:
@@ -136,6 +201,13 @@ paths:
                       message: "HTTP client exceeded 10s timeout"
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Optional Bearer token authentication. Only required when GATEWAY_TOKEN environment
+        variable is set. Health check endpoints never require authentication.
   schemas:
     HumanCallRequest:
       type: object

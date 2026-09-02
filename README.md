@@ -190,6 +190,155 @@ curl -X POST http://localhost:8080/v1/human-call \
 }
 ```
 
+## 测试部署
+
+### Docker 部署
+
+项目包含用于测试环境部署的 Dockerfile 和测试配置文件。
+
+#### 构建 Docker 镜像
+
+```bash
+docker build -t human-call-gateway:test .
+```
+
+#### 运行容器
+
+基本运行（使用 httpbin 作为测试端点）:
+
+```bash
+docker run -p 8080:8080 \
+  -e GENERIC_WEBHOOK_URL=https://httpbin.org/post \
+  human-call-gateway:test
+```
+
+带认证的运行:
+
+```bash
+docker run -p 8080:8080 \
+  -e GENERIC_WEBHOOK_URL=https://httpbin.org/post \
+  -e GATEWAY_TOKEN=your-secret-token-here \
+  human-call-gateway:test
+```
+
+#### 测试健康检查
+
+```bash
+curl http://localhost:8080/health
+# 返回: {"status":"ok"}
+```
+
+#### 发送测试请求
+
+不带认证:
+
+```bash
+curl -X POST http://localhost:8080/v1/human-call \
+  -H "Content-Type: application/json" \
+  -d '{
+    "need": "需要测试工程师",
+    "blocker": "测试环境配置问题",
+    "action": "请检查测试配置",
+    "fallback": "暂时跳过此测试"
+  }'
+```
+
+带认证:
+
+```bash
+curl -X POST http://localhost:8080/v1/human-call \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-token-here" \
+  -d '{
+    "need": "需要测试工程师",
+    "blocker": "测试环境配置问题",
+    "action": "请检查测试配置",
+    "fallback": "暂时跳过此测试"
+  }'
+```
+
+成功响应示例:
+
+```json
+{
+  "sent": true,
+  "id": "gw-20260902-074100-abc123"
+}
+```
+
+### 使用 httpbin 进行烟雾测试
+
+httpbin.org 是一个免费的 HTTP 请求测试服务，可以用于验证网关是否正常发送消息:
+
+```bash
+# 设置 GENERIC_WEBHOOK_URL 指向 httpbin
+export GENERIC_WEBHOOK_URL=https://httpbin.org/post
+
+# 启动网关
+docker run -p 8080:8080 \
+  -e GENERIC_WEBHOOK_URL=https://httpbin.org/post \
+  human-call-gateway:test
+
+# 发送测试请求
+curl -X POST http://localhost:8080/v1/human-call \
+  -H "Content-Type: application/json" \
+  -d '{
+    "need": "测试",
+    "blocker": "测试",
+    "action": "测试",
+    "fallback": "测试"
+  }'
+
+# 如果返回 sent:true，说明网关正常工作
+```
+
+### 切换到真实通道
+
+要使用真实的 Slack/Telegram/Feishu webhook，只需更改 `GENERIC_WEBHOOK_URL` 环境变量:
+
+**Slack:**
+```bash
+export GENERIC_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+```
+
+**Feishu/Lark:**
+```bash
+export GENERIC_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/YOUR-TOKEN
+```
+
+**自定义 Webhook:**
+```bash
+export GENERIC_WEBHOOK_URL=https://your-domain.com/webhook
+export GATEWAY_TOKEN=your-secret-token
+```
+
+无需修改代码或重新构建镜像，只需重启容器并传入新的环境变量。
+
+### Render 部署
+
+项目包含 `render.yaml` 配置文件，可以直接部署到 Render:
+
+1. 在 [Render Dashboard](https://dashboard.render.com/) 中创建新服务
+2. 选择 "Blueprint" 方式
+3. 连接此 Git 仓库
+4. Render 会自动识别 `render.yaml`
+5. 在环境变量设置中配置 `GATEWAY_TOKEN` (可选，用于认证)
+6. 修改 `GENERIC_WEBHOOK_URL` 为你的真实 webhook 地址
+7. 点击部署
+
+健康检查会自动配置为 `/health` 端点。
+
+**环境变量说明:**
+
+- `PORT`: 监听端口 (默认 8080，Render 会自动设置)
+- `CONFIG_PATH`: 配置文件路径 (默认 `/app/config.test.yaml`)
+- `GENERIC_WEBHOOK_URL`: Webhook 目标 URL
+  - 烟雾测试: `https://httpbin.org/post`
+  - 生产环境: 替换为真实的 Slack/Telegram/Feishu webhook URL
+- `GATEWAY_TOKEN`: 可选的 Bearer token 认证
+  - 未设置: 无需认证 (本地开发模式)
+  - 已设置: 需要在请求中包含 `Authorization: Bearer <token>` 头
+
 ## 开发
 
 ### 运行测试

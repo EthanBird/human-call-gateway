@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/EthanBird/human-call-gateway/internal/adapter"
@@ -40,28 +41,53 @@ type ErrorDetail struct {
 
 // Handler handles HTTP requests for the gateway
 type Handler struct {
-	config   *config.Config
-	registry *adapter.Registry
+	config      *config.Config
+	registry    *adapter.Registry
+	gatewayToken string
 }
 
 // NewHandler creates a new HTTP handler
 func NewHandler(cfg *config.Config, registry *adapter.Registry) *Handler {
 	return &Handler{
-		config:   cfg,
-		registry: registry,
+		config:       cfg,
+		registry:     registry,
+		gatewayToken: strings.TrimSpace(getEnv("GATEWAY_TOKEN")),
 	}
 }
 
 // ServeHTTP implements http.Handler
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Health check endpoints (no auth required)
+	if r.URL.Path == "/health" || r.URL.Path == "/" {
+		if r.Method != http.MethodGet {
+			h.sendError(w, http.StatusMethodNotAllowed, adapter.ErrCodeInvalidPayload, "Method not allowed")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+		return
+	}
+
+	// Only POST /v1/human-call is supported beyond this point
+	if r.URL.Path != "/v1/human-call" {
+		h.sendError(w, http.StatusNotFound, adapter.ErrCodeInvalidPayload, "Not found")
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		h.sendError(w, http.StatusMethodNotAllowed, adapter.ErrCodeInvalidPayload, "Method not allowed")
 		return
 	}
 
-	if r.URL.Path != "/v1/human-call" {
-		h.sendError(w, http.StatusNotFound, adapter.ErrCodeInvalidPayload, "Not found")
-		return
+	// Check Bearer token if GATEWAY_TOKEN is configured
+	if h.gatewayToken != "" {
+		authHeader := r.Header.Get("Authorization")
+		expectedAuth := "Bearer " + h.gatewayToken
+		if authHeader != expectedAuth {
+			h.sendError(w, http.StatusUnauthorized, adapter.ErrCodeInvalidPayload, "Unauthorized")
+			return
+		}
 	}
 
 	var req HumanCallRequest
@@ -203,4 +229,8 @@ func (h *Handler) sendError(w http.ResponseWriter, statusCode int, code adapter.
 			Message: message,
 		},
 	})
+}
+
+func getEnv(key string) string {
+	return strings.TrimSpace(os.Getenv(key))
 }

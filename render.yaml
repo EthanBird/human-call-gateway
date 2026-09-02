@@ -1,0 +1,24 @@
+# Render Blueprint for Human Call Gateway Test Environment
+# Deploy via Render Dashboard or CLI: https://render.com/docs/infrastructure-as-code
+
+services:
+  - type: web
+    name: human-call-gateway-test
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: CONFIG_PATH
+        value: /app/config.test.yaml
+      - key: GENERIC_WEBHOOK_URL
+        value: https://httpbin.org/post
+        # For smoke testing, this sends to httpbin which echoes the request
+        # Replace with your actual Slack/Telegram/Feishu webhook URL for real testing
+      - key: GATEWAY_TOKEN
+        sync: false
+        # IMPORTANT: Set this via Render Dashboard as a secret environment variable
+        # If left empty, no authentication is required (local dev mode)
+        # For staging/production, set a strong random token

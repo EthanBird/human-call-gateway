@@ -1,0 +1,17 @@
+# Test configuration for Human Call Gateway
+# This is a minimal test configuration with a single webhook channel
+# All secrets must be provided via environment variables
+
+default_channel_id: "webhook-test"
+
+channels:
+  # Generic webhook for testing
+  # Set GENERIC_WEBHOOK_URL to your webhook endpoint
+  # For smoke testing, use https://httpbin.org/post
+  - id: "webhook-test"
+    type: webhook
+    enabled: true
+    webhook:
+      url_env: GENERIC_WEBHOOK_URL
+      method: POST
+      content_type: "application/json"
