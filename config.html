@@ -338,6 +338,14 @@
                         delete channel.config[configField];
                     } else {
                         channel.config[configField] = value;
+                        // Webhook url/url_env are mutually exclusive (oneOf)
+                        if (channel.type === 'webhook') {
+                            if (configField === 'url' && value) {
+                                delete channel.config.url_env;
+                            } else if (configField === 'url_env' && value) {
+                                delete channel.config.url;
+                            }
+                        }
                     }
                 } else {
                     channel[field] = value;
@@ -416,34 +424,42 @@
                             <div class="hint">环境变量名,包含 OneBot access token</div>
                         </div>
                         <div class="form-group">
-                            <label>User ID (二选一)</label>
+                            <label>User ID (至少填一个) *</label>
                             <input type="text" value="${channel.config.user_id || ''}"
                                    onchange="updateChannel('${channel.id}', 'config.user_id', this.value)"
                                    placeholder="123456789">
+                            <div class="hint">QQ 用户 ID (私聊)</div>
                         </div>
                         <div class="form-group">
-                            <label>Group ID (二选一)</label>
+                            <label>Group ID (至少填一个) *</label>
                             <input type="text" value="${channel.config.group_id || ''}"
                                    onchange="updateChannel('${channel.id}', 'config.group_id', this.value)"
                                    placeholder="987654321">
+                            <div class="hint">QQ 群 ID (群聊)</div>
                         </div>
                     `;
                     break;
                 
                 case 'webhook':
+                    const hasUrl = channel.config.url ? true : false;
+                    const hasUrlEnv = channel.config.url_env ? true : false;
                     html += `
                         <div class="form-group">
-                            <label>URL (二选一)</label>
+                            <label>URL (二选一) *</label>
                             <input type="text" value="${channel.config.url || ''}"
+                                   id="webhook-url-${channel.id}"
                                    onchange="updateChannel('${channel.id}', 'config.url', this.value)"
-                                   placeholder="https://example.com/webhook">
+                                   placeholder="https://example.com/webhook"
+                                   ${hasUrlEnv ? 'disabled' : ''}>
                             <div class="hint">直接填写 URL (非密钥场景)</div>
                         </div>
                         <div class="form-group">
-                            <label>URL Env (二选一)</label>
+                            <label>URL Env (二选一) *</label>
                             <input type="text" value="${channel.config.url_env || ''}"
+                                   id="webhook-url-env-${channel.id}"
                                    onchange="updateChannel('${channel.id}', 'config.url_env', this.value)"
-                                   placeholder="WEBHOOK_URL">
+                                   placeholder="WEBHOOK_URL"
+                                   ${hasUrl ? 'disabled' : ''}>
                             <div class="hint">环境变量名,包含 webhook URL (包含密钥时使用)</div>
                         </div>
                         <div class="form-group">
@@ -513,6 +529,42 @@
         }
 
         function generateYAML() {
+            // Validate all channels before generating YAML
+            const errors = [];
+            
+            channels.forEach((channel, index) => {
+                if (!channel.channelId) return;
+                
+                const channelNum = index + 1;
+                
+                // Validate webhook: exactly one of url or url_env (oneOf)
+                if (channel.type === 'webhook') {
+                    const hasUrl = channel.config.url && channel.config.url.trim();
+                    const hasUrlEnv = channel.config.url_env && channel.config.url_env.trim();
+                    
+                    if (!hasUrl && !hasUrlEnv) {
+                        errors.push(`通道 #${channelNum} (${channel.channelId}): webhook 必须填写 URL 或 URL Env 之一`);
+                    } else if (hasUrl && hasUrlEnv) {
+                        errors.push(`通道 #${channelNum} (${channel.channelId}): webhook 的 URL 和 URL Env 只能填写一个`);
+                    }
+                }
+                
+                // Validate qq: at least one of user_id or group_id (anyOf)
+                if (channel.type === 'qq') {
+                    const hasUserId = channel.config.user_id && channel.config.user_id.trim();
+                    const hasGroupId = channel.config.group_id && channel.config.group_id.trim();
+                    
+                    if (!hasUserId && !hasGroupId) {
+                        errors.push(`通道 #${channelNum} (${channel.channelId}): qq 必须至少填写 User ID 或 Group ID 之一`);
+                    }
+                }
+            });
+            
+            if (errors.length > 0) {
+                alert('配置验证失败:\n\n' + errors.join('\n'));
+                return;
+            }
+            
             let yaml = '# Human Call Gateway Configuration\n';
             yaml += '# Generated by config.html\n\n';
 
