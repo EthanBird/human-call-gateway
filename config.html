@@ -682,7 +682,7 @@
             const urgent = document.getElementById('testUrgent').checked;
 
             if (!need || !blocker || !action || !fallback) {
-                showResult('error', '请填写所有必填字段 (need, blocker, action, fallback)');
+                alert('请填写所有必填字段 (need, blocker, action, fallback)');
                 return;
             }
 
@@ -702,10 +702,7 @@
             }
 
             const resultDiv = document.getElementById('testResult');
-            resultDiv.innerHTML = '<div class="result">发送中...</div>';
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 12000);
+            resultDiv.innerHTML = '';
 
             try {
                 const url = gatewayUrl.endsWith('/') ? 
@@ -717,34 +714,34 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(payload),
-                    signal: controller.signal
+                    body: JSON.stringify(payload)
                 });
 
-                clearTimeout(timeoutId);
+                let result = '';
+                try {
+                    const data = await response.json();
+                    result = JSON.stringify(data, null, 2);
+                } catch (e) {
+                    const text = await response.text();
+                    result = text || '';
+                }
 
-                const data = await response.json();
-                const formattedResult = JSON.stringify(data, null, 2);
-
-                if (response.ok) {
-                    showResult('success', `成功 (${response.status}):\n${formattedResult}`);
-                } else {
-                    showResult('error', `失败 (${response.status}):\n${formattedResult}`);
+                if (result) {
+                    showResult(response.ok ? 'success' : 'error', result);
                 }
             } catch (error) {
-                clearTimeout(timeoutId);
-                
-                if (error.name === 'AbortError') {
-                    showResult('error', '请求超时 (>12s)\n客户端中止了请求');
-                } else {
-                    showResult('error', `网络错误:\n${error.message}`);
-                }
+                // Network error: leave empty or show minimal info
+                showResult('error', '');
             }
         }
 
         function showResult(type, message) {
             const resultDiv = document.getElementById('testResult');
-            resultDiv.innerHTML = `<div class="result ${type}"><pre style="background: transparent; color: inherit; padding: 0; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${message}</pre></div>`;
+            if (message) {
+                resultDiv.innerHTML = `<div class="result ${type}"><pre style="background: transparent; color: inherit; padding: 0; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${message}</pre></div>`;
+            } else {
+                resultDiv.innerHTML = '';
+            }
         }
 
         // Initialize with one channel
