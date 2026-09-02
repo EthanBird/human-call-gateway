@@ -1,0 +1,50 @@
+# Human Call Gateway Configuration Example
+# This configuration demonstrates all supported channel types.
+# All secrets are referenced via environment variable names, never literal values.
+
+default_channel_id: "generic-webhook"
+
+channels:
+  # Slack: uses Incoming Webhook
+  - id: "slack-alerts"
+    type: slack
+    enabled: true
+    slack:
+      webhook_url_env: SLACK_WEBHOOK_URL
+
+  # Telegram: uses Bot API
+  - id: "telegram-ops"
+    type: telegram
+    enabled: true
+    telegram:
+      bot_token_env: TELEGRAM_BOT_TOKEN
+      chat_id: "-1001234567890"
+      api_base_url: "https://api.telegram.org"
+
+  # Feishu/Lark: uses custom bot webhook
+  - id: "feishu-team"
+    type: feishu
+    enabled: true
+    feishu:
+      webhook_url_env: FEISHU_WEBHOOK_URL
+
+  # QQ: uses go-cqhttp / OneBot HTTP API
+  - id: "qq-group"
+    type: qq
+    enabled: true
+    qq:
+      http_api_url: "http://127.0.0.1:5700/send_msg"
+      access_token_env: QQ_ACCESS_TOKEN
+      group_id: "987654321"
+
+  # Generic webhook: for any HTTP endpoint
+  - id: "generic-webhook"
+    type: webhook
+    enabled: true
+    webhook:
+      url_env: GENERIC_WEBHOOK_URL
+      method: POST
+      headers:
+        Authorization: "Bearer ${WEBHOOK_API_TOKEN}"
+        X-Custom-Header: "human-call-gateway"
+      content_type: "application/json"
