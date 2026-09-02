@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Call Gateway - Config Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+
+        h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #1a1a1a;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="url"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus,
+        input[type="url"]:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #4a90e2;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 6px;
+        }
+
+        button {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #357abd;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: #6c757d;
+        }
+
+        button.secondary:hover {
+            background: #5a6268;
+        }
+
+        button.danger {
+            background: #dc3545;
+        }
+
+        button.danger:hover {
+            background: #c82333;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .channel-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: #fafafa;
+        }
+
+        .channel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .channel-header h3 {
+            font-size: 16px;
+            color: #333;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+
+        .result {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .inline-checkbox {
+            display: flex;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        .inline-checkbox label {
+            margin-bottom: 0;
+            margin-left: 4px;
+            font-weight: normal;
+        }
+
+        .type-specific {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed #ddd;
+        }
+
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #ffeaa7;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <h1>Human Call Gateway</h1>
+            <p class="subtitle">配置生成器 - 生成 YAML 配置文件并测试发送</p>
+            
+            <div class="warning">
+                <strong>注意:</strong> 此页面仅生成配置 YAML,不会保存到服务器。Secrets 字段请填写<strong>环境变量名</strong>,而非实际密钥值。
+            </div>
+
+            <h2>根配置</h2>
+            <div class="form-group">
+                <label for="defaultChannelId">Default Channel ID (可选)</label>
+                <input type="text" id="defaultChannelId" placeholder="留空或填写默认通道 ID">
+                <div class="hint">当请求未指定 channel_id 时使用的默认通道</div>
+            </div>
+
+            <h2>通道配置</h2>
+            <div id="channelsList"></div>
+            <button onclick="addChannel()">+ 添加通道</button>
+
+            <div class="button-group">
+                <button onclick="generateYAML()">生成 YAML</button>
+                <button class="secondary" onclick="copyYAML()">复制 YAML</button>
+                <button class="secondary" onclick="downloadYAML()">下载 YAML</button>
+            </div>
+        </div>
+
+        <div>
+            <div class="panel" style="margin-bottom: 20px;">
+                <h2>YAML 预览</h2>
+                <pre id="yamlPreview"># 配置将显示在这里
+# 点击"生成 YAML"按钮生成配置</pre>
+            </div>
+
+            <div class="panel">
+                <h2>测试发送</h2>
+                <div class="form-group">
+                    <label for="gatewayUrl">Gateway 基础 URL</label>
+                    <input type="url" id="gatewayUrl" value="http://localhost:8080" placeholder="http://localhost:8080">
+                </div>
+
+                <div class="form-group">
+                    <label for="testNeed">Need (需要人) *</label>
+                    <input type="text" id="testNeed" placeholder="需要后端工程师" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="testBlocker">Blocker (卡在) *</label>
+                    <input type="text" id="testBlocker" placeholder="API 返回格式变更导致页面白屏" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="testAction">Action (请你) *</label>
+                    <input type="text" id="testAction" placeholder="请修复 /api/users 接口的响应处理" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="testFallback">Fallback (不做也能) *</label>
+                    <input type="text" id="testFallback" placeholder="暂时使用旧版本回滚" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="testChannelId">Channel ID (可选)</label>
+                    <input type="text" id="testChannelId" placeholder="留空使用默认通道">
+                </div>
+
+                <div class="inline-checkbox">
+                    <input type="checkbox" id="testUrgent">
+                    <label for="testUrgent">Urgent (紧急 - 仅转发标记,不影响超时)</label>
+                </div>
+
+                <div class="button-group">
+                    <button onclick="testSend()">发送测试</button>
+                </div>
+
+                <div id="testResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let channels = [];
+        let channelIdCounter = 1;
+
+        function addChannel() {
+            const channel = {
+                id: `channel-${channelIdCounter++}`,
+                channelId: '',
+                type: 'slack',
+                enabled: true,
+                config: {}
+            };
+            channels.push(channel);
+            renderChannels();
+        }
+
+        function removeChannel(id) {
+            channels = channels.filter(c => c.id !== id);
+            renderChannels();
+        }
+
+        function updateChannel(id, field, value) {
+            const channel = channels.find(c => c.id === id);
+            if (channel) {
+                if (field === 'type') {
+                    channel.type = value;
+                    channel.config = {};
+                } else if (field.startsWith('config.')) {
+                    const configField = field.substring(7);
+                    if (value === '') {
+                        delete channel.config[configField];
+                    } else {
+                        channel.config[configField] = value;
+                    }
+                } else {
+                    channel[field] = value;
+                }
+                renderChannels();
+            }
+        }
+
+        function renderTypeSpecificFields(channel) {
+            let html = '<div class="type-specific">';
+            
+            switch (channel.type) {
+                case 'slack':
+                    html += `
+                        <div class="form-group">
+                            <label>Webhook URL Env *</label>
+                            <input type="text" value="${channel.config.webhook_url_env || ''}" 
+                                   onchange="updateChannel('${channel.id}', 'config.webhook_url_env', this.value)"
+                                   placeholder="SLACK_WEBHOOK_URL">
+                            <div class="hint">环境变量名,包含 Slack Incoming Webhook URL</div>
+                        </div>
+                    `;
+                    break;
+                
+                case 'telegram':
+                    html += `
+                        <div class="form-group">
+                            <label>Bot Token Env *</label>
+                            <input type="text" value="${channel.config.bot_token_env || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.bot_token_env', this.value)"
+                                   placeholder="TELEGRAM_BOT_TOKEN">
+                            <div class="hint">环境变量名,包含 Telegram bot token</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Chat ID *</label>
+                            <input type="text" value="${channel.config.chat_id || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.chat_id', this.value)"
+                                   placeholder="-1001234567890">
+                            <div class="hint">Telegram 聊天 ID (用户/群组/频道)</div>
+                        </div>
+                        <div class="form-group">
+                            <label>API Base URL (可选)</label>
+                            <input type="text" value="${channel.config.api_base_url || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.api_base_url', this.value)"
+                                   placeholder="https://api.telegram.org">
+                        </div>
+                    `;
+                    break;
+                
+                case 'feishu':
+                    html += `
+                        <div class="form-group">
+                            <label>Webhook URL Env *</label>
+                            <input type="text" value="${channel.config.webhook_url_env || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.webhook_url_env', this.value)"
+                                   placeholder="FEISHU_WEBHOOK_URL">
+                            <div class="hint">环境变量名,包含飞书 webhook URL</div>
+                        </div>
+                    `;
+                    break;
+                
+                case 'qq':
+                    html += `
+                        <div class="form-group">
+                            <label>HTTP API URL *</label>
+                            <input type="text" value="${channel.config.http_api_url || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.http_api_url', this.value)"
+                                   placeholder="http://127.0.0.1:5700/send_msg">
+                            <div class="hint">go-cqhttp / OneBot HTTP API 端点</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Access Token Env (可选)</label>
+                            <input type="text" value="${channel.config.access_token_env || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.access_token_env', this.value)"
+                                   placeholder="QQ_ACCESS_TOKEN">
+                            <div class="hint">环境变量名,包含 OneBot access token</div>
+                        </div>
+                        <div class="form-group">
+                            <label>User ID (二选一)</label>
+                            <input type="text" value="${channel.config.user_id || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.user_id', this.value)"
+                                   placeholder="123456789">
+                        </div>
+                        <div class="form-group">
+                            <label>Group ID (二选一)</label>
+                            <input type="text" value="${channel.config.group_id || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.group_id', this.value)"
+                                   placeholder="987654321">
+                        </div>
+                    `;
+                    break;
+                
+                case 'webhook':
+                    html += `
+                        <div class="form-group">
+                            <label>URL (二选一)</label>
+                            <input type="text" value="${channel.config.url || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.url', this.value)"
+                                   placeholder="https://example.com/webhook">
+                            <div class="hint">直接填写 URL (非密钥场景)</div>
+                        </div>
+                        <div class="form-group">
+                            <label>URL Env (二选一)</label>
+                            <input type="text" value="${channel.config.url_env || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.url_env', this.value)"
+                                   placeholder="WEBHOOK_URL">
+                            <div class="hint">环境变量名,包含 webhook URL (包含密钥时使用)</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Headers (可选, JSON 格式)</label>
+                            <textarea rows="3"
+                                      onchange="updateChannel('${channel.id}', 'config.headers', this.value)"
+                                      placeholder='{"Authorization": "Bearer ${API_TOKEN}"}'>${channel.config.headers || ''}</textarea>
+                            <div class="hint">JSON 对象,值可使用 \${ENV_VAR} 占位符</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Content Type (可选)</label>
+                            <input type="text" value="${channel.config.content_type || ''}"
+                                   onchange="updateChannel('${channel.id}', 'config.content_type', this.value)"
+                                   placeholder="application/json">
+                        </div>
+                    `;
+                    break;
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
+        function renderChannels() {
+            const container = document.getElementById('channelsList');
+            if (channels.length === 0) {
+                container.innerHTML = '<p style="color: #999; font-style: italic;">暂无通道,点击下方按钮添加</p>';
+                return;
+            }
+
+            container.innerHTML = channels.map(channel => `
+                <div class="channel-item">
+                    <div class="channel-header">
+                        <h3>通道 #${channels.indexOf(channel) + 1}</h3>
+                        <button class="danger" onclick="removeChannel('${channel.id}')">删除</button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Channel ID *</label>
+                        <input type="text" value="${channel.channelId}" 
+                               onchange="updateChannel('${channel.id}', 'channelId', this.value)"
+                               placeholder="my-channel">
+                        <div class="hint">唯一标识符,用于 API 请求中选择此通道</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Type *</label>
+                        <select onchange="updateChannel('${channel.id}', 'type', this.value)">
+                            <option value="slack" ${channel.type === 'slack' ? 'selected' : ''}>Slack</option>
+                            <option value="telegram" ${channel.type === 'telegram' ? 'selected' : ''}>Telegram</option>
+                            <option value="feishu" ${channel.type === 'feishu' ? 'selected' : ''}>Feishu/Lark</option>
+                            <option value="qq" ${channel.type === 'qq' ? 'selected' : ''}>QQ (go-cqhttp)</option>
+                            <option value="webhook" ${channel.type === 'webhook' ? 'selected' : ''}>Generic Webhook</option>
+                        </select>
+                    </div>
+
+                    <div class="inline-checkbox">
+                        <input type="checkbox" id="enabled-${channel.id}" 
+                               ${channel.enabled ? 'checked' : ''}
+                               onchange="updateChannel('${channel.id}', 'enabled', this.checked)">
+                        <label for="enabled-${channel.id}">启用此通道</label>
+                    </div>
+
+                    ${renderTypeSpecificFields(channel)}
+                </div>
+            `).join('');
+        }
+
+        function generateYAML() {
+            let yaml = '# Human Call Gateway Configuration\n';
+            yaml += '# Generated by config.html\n\n';
+
+            const defaultChannelId = document.getElementById('defaultChannelId').value.trim();
+            if (defaultChannelId) {
+                yaml += `default_channel_id: "${defaultChannelId}"\n`;
+            }
+            
+            yaml += '\nchannels:\n';
+
+            if (channels.length === 0) {
+                yaml += '  # No channels configured\n';
+            }
+
+            channels.forEach(channel => {
+                if (!channel.channelId) return;
+
+                yaml += `  - id: "${channel.channelId}"\n`;
+                yaml += `    type: ${channel.type}\n`;
+                yaml += `    enabled: ${channel.enabled}\n`;
+                
+                const config = channel.config;
+                
+                switch (channel.type) {
+                    case 'slack':
+                        if (config.webhook_url_env) {
+                            yaml += `    slack:\n`;
+                            yaml += `      webhook_url_env: ${config.webhook_url_env}\n`;
+                        }
+                        break;
+                    
+                    case 'telegram':
+                        if (config.bot_token_env || config.chat_id) {
+                            yaml += `    telegram:\n`;
+                            if (config.bot_token_env) yaml += `      bot_token_env: ${config.bot_token_env}\n`;
+                            if (config.chat_id) yaml += `      chat_id: "${config.chat_id}"\n`;
+                            if (config.api_base_url) yaml += `      api_base_url: "${config.api_base_url}"\n`;
+                        }
+                        break;
+                    
+                    case 'feishu':
+                        if (config.webhook_url_env) {
+                            yaml += `    feishu:\n`;
+                            yaml += `      webhook_url_env: ${config.webhook_url_env}\n`;
+                        }
+                        break;
+                    
+                    case 'qq':
+                        if (config.http_api_url) {
+                            yaml += `    qq:\n`;
+                            yaml += `      http_api_url: "${config.http_api_url}"\n`;
+                            if (config.access_token_env) yaml += `      access_token_env: ${config.access_token_env}\n`;
+                            if (config.user_id) yaml += `      user_id: "${config.user_id}"\n`;
+                            if (config.group_id) yaml += `      group_id: "${config.group_id}"\n`;
+                        }
+                        break;
+                    
+                    case 'webhook':
+                        if (config.url || config.url_env) {
+                            yaml += `    webhook:\n`;
+                            if (config.url) yaml += `      url: "${config.url}"\n`;
+                            if (config.url_env) yaml += `      url_env: ${config.url_env}\n`;
+                            if (config.headers) {
+                                try {
+                                    const headers = typeof config.headers === 'string' ? 
+                                                   JSON.parse(config.headers) : config.headers;
+                                    yaml += `      headers:\n`;
+                                    Object.entries(headers).forEach(([key, value]) => {
+                                        yaml += `        ${key}: "${value}"\n`;
+                                    });
+                                } catch (e) {
+                                    // Invalid JSON, skip
+                                }
+                            }
+                            if (config.content_type) yaml += `      content_type: "${config.content_type}"\n`;
+                        }
+                        break;
+                }
+                
+                yaml += '\n';
+            });
+
+            document.getElementById('yamlPreview').textContent = yaml;
+        }
+
+        function copyYAML() {
+            const yaml = document.getElementById('yamlPreview').textContent;
+            navigator.clipboard.writeText(yaml).then(() => {
+                alert('YAML 已复制到剪贴板');
+            }).catch(() => {
+                alert('复制失败,请手动复制');
+            });
+        }
+
+        function downloadYAML() {
+            const yaml = document.getElementById('yamlPreview').textContent;
+            const blob = new Blob([yaml], { type: 'text/yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'config.yaml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function testSend() {
+            const gatewayUrl = document.getElementById('gatewayUrl').value.trim();
+            const need = document.getElementById('testNeed').value.trim();
+            const blocker = document.getElementById('testBlocker').value.trim();
+            const action = document.getElementById('testAction').value.trim();
+            const fallback = document.getElementById('testFallback').value.trim();
+            const channelId = document.getElementById('testChannelId').value.trim();
+            const urgent = document.getElementById('testUrgent').checked;
+
+            if (!need || !blocker || !action || !fallback) {
+                showResult('error', '请填写所有必填字段 (need, blocker, action, fallback)');
+                return;
+            }
+
+            const payload = {
+                need,
+                blocker,
+                action,
+                fallback
+            };
+
+            if (channelId) {
+                payload.channel_id = channelId;
+            }
+
+            if (urgent) {
+                payload.urgent = true;
+            }
+
+            const resultDiv = document.getElementById('testResult');
+            resultDiv.innerHTML = '<div class="result">发送中...</div>';
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+            try {
+                const url = gatewayUrl.endsWith('/') ? 
+                           `${gatewayUrl}v1/human-call` : 
+                           `${gatewayUrl}/v1/human-call`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                const data = await response.json();
+                const formattedResult = JSON.stringify(data, null, 2);
+
+                if (response.ok) {
+                    showResult('success', `成功 (${response.status}):\n${formattedResult}`);
+                } else {
+                    showResult('error', `失败 (${response.status}):\n${formattedResult}`);
+                }
+            } catch (error) {
+                clearTimeout(timeoutId);
+                
+                if (error.name === 'AbortError') {
+                    showResult('error', '请求超时 (>12s)\n客户端中止了请求');
+                } else {
+                    showResult('error', `网络错误:\n${error.message}`);
+                }
+            }
+        }
+
+        function showResult(type, message) {
+            const resultDiv = document.getElementById('testResult');
+            resultDiv.innerHTML = `<div class="result ${type}"><pre style="background: transparent; color: inherit; padding: 0; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${message}</pre></div>`;
+        }
+
+        // Initialize with one channel
+        addChannel();
+        renderChannels();
+    </script>
+</body>
+</html>
