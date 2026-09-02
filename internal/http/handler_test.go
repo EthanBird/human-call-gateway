@@ -673,3 +673,238 @@ func TestHandler_NoSensitiveInfoInErrors(t *testing.T) {
 func boolPtr(b bool) *bool {
 	return &b
 }
+
+func TestHandler_HealthCheck(t *testing.T) {
+	cfg := &config.Config{
+		DefaultChannelID: "test-channel",
+		Channels: []config.Channel{
+			{
+				ID:      "test-channel",
+				Type:    "webhook",
+				Enabled: boolPtr(true),
+				Webhook: &config.WebhookChannelConfig{URL: "http://example.com"},
+			},
+		},
+	}
+
+	handler := setupTestHandler(t, cfg, map[string]*fakeAdapter{
+		"webhook": {
+			sendFunc: func(ctx context.Context, channelConfig adapter.ChannelConfig, payload adapter.HumanCallPayload) (adapter.SendResult, error) {
+				t.Fatal("adapter should not be called for health check")
+				return adapter.SendResult{}, nil
+			},
+		},
+	})
+
+	tests := []struct {
+		name   string
+		path   string
+		method string
+	}{
+		{name: "GET /health", path: "/health", method: "GET"},
+		{name: "GET /", path: "/", method: "GET"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("expected status 200, got %d", w.Code)
+			}
+
+			contentType := w.Header().Get("Content-Type")
+			if contentType != "application/json" {
+				t.Errorf("expected Content-Type application/json, got %s", contentType)
+			}
+
+			body := w.Body.String()
+			expected := `{"status":"ok"}`
+			if body != expected {
+				t.Errorf("expected body %s, got %s", expected, body)
+			}
+		})
+	}
+}
+
+func TestHandler_HealthCheckMethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{
+		DefaultChannelID: "test-channel",
+		Channels: []config.Channel{
+			{
+				ID:      "test-channel",
+				Type:    "webhook",
+				Enabled: boolPtr(true),
+				Webhook: &config.WebhookChannelConfig{URL: "http://example.com"},
+			},
+		},
+	}
+
+	handler := setupTestHandler(t, cfg, map[string]*fakeAdapter{
+		"webhook": {
+			sendFunc: func(ctx context.Context, channelConfig adapter.ChannelConfig, payload adapter.HumanCallPayload) (adapter.SendResult, error) {
+				t.Fatal("adapter should not be called")
+				return adapter.SendResult{}, nil
+			},
+		},
+	})
+
+	req := httptest.NewRequest("POST", "/health", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status 405, got %d", w.Code)
+	}
+}
+
+func TestHandler_BearerTokenAuth(t *testing.T) {
+	cfg := &config.Config{
+		DefaultChannelID: "test-channel",
+		Channels: []config.Channel{
+			{
+				ID:      "test-channel",
+				Type:    "webhook",
+				Enabled: boolPtr(true),
+				Webhook: &config.WebhookChannelConfig{URL: "http://example.com"},
+			},
+		},
+	}
+
+	tests := []struct {
+		name           string
+		gatewayToken   string
+		authHeader     string
+		expectedStatus int
+		shouldCallSend bool
+	}{
+		{
+			name:           "no token configured, no auth header",
+			gatewayToken:   "",
+			authHeader:     "",
+			expectedStatus: http.StatusOK,
+			shouldCallSend: true,
+		},
+		{
+			name:           "no token configured, with auth header",
+			gatewayToken:   "",
+			authHeader:     "Bearer some-token",
+			expectedStatus: http.StatusOK,
+			shouldCallSend: true,
+		},
+		{
+			name:           "token configured, correct auth",
+			gatewayToken:   "secret-token-123",
+			authHeader:     "Bearer secret-token-123",
+			expectedStatus: http.StatusOK,
+			shouldCallSend: true,
+		},
+		{
+			name:           "token configured, no auth header",
+			gatewayToken:   "secret-token-123",
+			authHeader:     "",
+			expectedStatus: http.StatusUnauthorized,
+			shouldCallSend: false,
+		},
+		{
+			name:           "token configured, wrong token",
+			gatewayToken:   "secret-token-123",
+			authHeader:     "Bearer wrong-token",
+			expectedStatus: http.StatusUnauthorized,
+			shouldCallSend: false,
+		},
+		{
+			name:           "token configured, malformed auth header",
+			gatewayToken:   "secret-token-123",
+			authHeader:     "secret-token-123",
+			expectedStatus: http.StatusUnauthorized,
+			shouldCallSend: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("GATEWAY_TOKEN", tt.gatewayToken)
+			defer os.Unsetenv("GATEWAY_TOKEN")
+
+			sendCalled := false
+			handler := setupTestHandler(t, cfg, map[string]*fakeAdapter{
+				"webhook": {
+					sendFunc: func(ctx context.Context, channelConfig adapter.ChannelConfig, payload adapter.HumanCallPayload) (adapter.SendResult, error) {
+						sendCalled = true
+						return adapter.SendResult{Sent: true, ID: "test-id"}, nil
+					},
+				},
+			})
+
+			body := `{"need":"test","blocker":"test","action":"test","fallback":"test"}`
+			req := httptest.NewRequest("POST", "/v1/human-call", bytes.NewReader([]byte(body)))
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+
+			if sendCalled != tt.shouldCallSend {
+				t.Errorf("expected sendCalled=%v, got %v", tt.shouldCallSend, sendCalled)
+			}
+
+			if tt.expectedStatus == http.StatusUnauthorized {
+				var resp ErrorResponse
+				if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+					t.Fatalf("failed to decode error response: %v", err)
+				}
+				if resp.Error.Code != "INVALID_PAYLOAD" {
+					t.Errorf("expected error code INVALID_PAYLOAD, got %s", resp.Error.Code)
+				}
+				if !strings.Contains(resp.Error.Message, "Unauthorized") {
+					t.Errorf("expected error message to contain 'Unauthorized', got %s", resp.Error.Message)
+				}
+			}
+		})
+	}
+}
+
+func TestHandler_HealthCheckNoAuth(t *testing.T) {
+	cfg := &config.Config{
+		DefaultChannelID: "test-channel",
+		Channels: []config.Channel{
+			{
+				ID:      "test-channel",
+				Type:    "webhook",
+				Enabled: boolPtr(true),
+				Webhook: &config.WebhookChannelConfig{URL: "http://example.com"},
+			},
+		},
+	}
+
+	os.Setenv("GATEWAY_TOKEN", "secret-token-123")
+	defer os.Unsetenv("GATEWAY_TOKEN")
+
+	handler := setupTestHandler(t, cfg, map[string]*fakeAdapter{
+		"webhook": {
+			sendFunc: func(ctx context.Context, channelConfig adapter.ChannelConfig, payload adapter.HumanCallPayload) (adapter.SendResult, error) {
+				t.Fatal("adapter should not be called for health check")
+				return adapter.SendResult{}, nil
+			},
+		},
+	})
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200 even with GATEWAY_TOKEN set, got %d", w.Code)
+	}
+}
