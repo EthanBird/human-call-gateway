@@ -70,16 +70,16 @@ func (a *WebhookAdapter) Send(ctx context.Context, channelConfig ChannelConfig, 
 		headers["Content-Type"] = config.ContentType
 	}
 
-	respBody, statusCode, err := a.httpHelper.PostJSON(ctx, url, headers, body)
+	_, statusCode, err := a.httpHelper.PostJSON(ctx, url, headers, body)
 	if err != nil {
 		if IsTimeoutError(err) {
 			return SendResult{}, err
 		}
-		return SendResult{}, NewTransportError(fmt.Sprintf("Webhook request failed: %v", err), err)
+		return SendResult{}, NewTransportError("Webhook request failed", nil)
 	}
 
 	if statusCode < 200 || statusCode >= 300 {
-		return SendResult{}, NewTransportError(fmt.Sprintf("Webhook returned %d: %s", statusCode, string(respBody)), nil)
+		return SendResult{}, NewTransportError(fmt.Sprintf("Webhook returned %d", statusCode), nil)
 	}
 
 	return SendResult{

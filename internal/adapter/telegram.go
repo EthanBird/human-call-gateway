@@ -60,11 +60,11 @@ func (a *TelegramAdapter) Send(ctx context.Context, channelConfig ChannelConfig,
 		if IsTimeoutError(err) {
 			return SendResult{}, err
 		}
-		return SendResult{}, NewTransportError(fmt.Sprintf("Telegram API request failed: %v", err), err)
+		return SendResult{}, NewTransportError("Telegram API request failed", nil)
 	}
 
 	if statusCode < 200 || statusCode >= 300 {
-		return SendResult{}, NewTransportError(fmt.Sprintf("Telegram API returned %d: %s", statusCode, string(respBody)), nil)
+		return SendResult{}, NewTransportError(fmt.Sprintf("Telegram API returned %d", statusCode), nil)
 	}
 
 	var telegramResp struct {
@@ -75,11 +75,11 @@ func (a *TelegramAdapter) Send(ctx context.Context, channelConfig ChannelConfig,
 	}
 
 	if err := json.Unmarshal(respBody, &telegramResp); err != nil {
-		return SendResult{}, NewTransportError("Failed to parse Telegram response", err)
+		return SendResult{}, NewTransportError("Failed to parse Telegram response", nil)
 	}
 
 	if !telegramResp.Ok {
-		return SendResult{}, NewTransportError(fmt.Sprintf("Telegram API returned ok=false: %s", string(respBody)), nil)
+		return SendResult{}, NewTransportError("Telegram API returned ok=false", nil)
 	}
 
 	return SendResult{

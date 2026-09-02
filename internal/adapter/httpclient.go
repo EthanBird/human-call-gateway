@@ -22,6 +22,8 @@ func NewHTTPHelper(client *http.Client) *HTTPHelper {
 }
 
 // PostJSON sends a POST request with JSON body
+// Returns (responseBody, statusCode, error)
+// Errors never include URLs, tokens, or other sensitive data
 func (h *HTTPHelper) PostJSON(ctx context.Context, url string, headers map[string]string, body interface{}) ([]byte, int, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
@@ -30,7 +32,7 @@ func (h *HTTPHelper) PostJSON(ctx context.Context, url string, headers map[strin
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
 	if err != nil {
-		return nil, 0, fmt.Errorf("create request: %w", err)
+		return nil, 0, fmt.Errorf("create request failed")
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -40,7 +42,7 @@ func (h *HTTPHelper) PostJSON(ctx context.Context, url string, headers map[strin
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		// Check for timeout errors
+		// Check for timeout errors first
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, 0, NewTimeoutError("HTTP client exceeded 10s timeout")
 		}
@@ -48,13 +50,14 @@ func (h *HTTPHelper) PostJSON(ctx context.Context, url string, headers map[strin
 		if isNetTimeoutError(err) {
 			return nil, 0, NewTimeoutError("HTTP client exceeded 10s timeout")
 		}
-		return nil, 0, fmt.Errorf("send request: %w", err)
+		// Generic network error - do not include error details that might contain URLs
+		return nil, 0, fmt.Errorf("network request failed")
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("read response: %w", err)
+		return nil, resp.StatusCode, fmt.Errorf("read response failed")
 	}
 
 	return respBody, resp.StatusCode, nil

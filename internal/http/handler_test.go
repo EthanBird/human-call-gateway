@@ -513,6 +513,163 @@ func TestHandler_HTTPTransportWithTimeout(t *testing.T) {
 	}
 }
 
+func TestHandler_NoSensitiveInfoInErrors(t *testing.T) {
+	// Test that failed transports don't leak webhook URLs, tokens, or other sensitive data
+	sensitiveWebhookURL := "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX"
+	sensitiveTelegramToken := "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+	
+	tests := []struct {
+		name              string
+		channelType       string
+		config            *config.Config
+		setupEnv          func()
+		cleanupEnv        func()
+		forbiddenStrings  []string
+	}{
+		{
+			name:        "Slack webhook URL not in error message",
+			channelType: "slack",
+			config: &config.Config{
+				DefaultChannelID: "slack-test",
+				Channels: []config.Channel{
+					{
+						ID:      "slack-test",
+						Type:    "slack",
+						Enabled: boolPtr(true),
+						Slack:   &config.SlackChannelConfig{WebhookURLEnv: "TEST_SLACK_WEBHOOK"},
+					},
+				},
+			},
+			setupEnv: func() {
+				os.Setenv("TEST_SLACK_WEBHOOK", sensitiveWebhookURL)
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("TEST_SLACK_WEBHOOK")
+			},
+			forbiddenStrings: []string{
+				"hooks.slack.com",
+				sensitiveWebhookURL,
+				"XXXXXXXXXXXXXXXXXXXX",
+			},
+		},
+		{
+			name:        "Telegram token not in error message",
+			channelType: "telegram",
+			config: &config.Config{
+				DefaultChannelID: "telegram-test",
+				Channels: []config.Channel{
+					{
+						ID:      "telegram-test",
+						Type:    "telegram",
+						Enabled: boolPtr(true),
+						Telegram: &config.TelegramChannelConfig{
+							BotTokenEnv: "TEST_TELEGRAM_TOKEN",
+							ChatID:      "-1001234567890",
+							APIBaseURL:  "https://api.telegram.org",
+						},
+					},
+				},
+			},
+			setupEnv: func() {
+				os.Setenv("TEST_TELEGRAM_TOKEN", sensitiveTelegramToken)
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("TEST_TELEGRAM_TOKEN")
+			},
+			forbiddenStrings: []string{
+				sensitiveTelegramToken,
+				"ABCdefGHIjklMNOpqrsTUVwxyz",
+				"/bot" + sensitiveTelegramToken,
+			},
+		},
+		{
+			name:        "Webhook URL with token not in error message",
+			channelType: "webhook",
+			config: &config.Config{
+				DefaultChannelID: "webhook-test",
+				Channels: []config.Channel{
+					{
+						ID:      "webhook-test",
+						Type:    "webhook",
+						Enabled: boolPtr(true),
+						Webhook: &config.WebhookChannelConfig{
+							URLEnv: "TEST_WEBHOOK_URL",
+						},
+					},
+				},
+			},
+			setupEnv: func() {
+				os.Setenv("TEST_WEBHOOK_URL", "https://example.com/webhook?token=secret123456")
+			},
+			cleanupEnv: func() {
+				os.Unsetenv("TEST_WEBHOOK_URL")
+			},
+			forbiddenStrings: []string{
+				"https://example.com/webhook?token=secret123456",
+				"secret123456",
+				"token=secret",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupEnv()
+			defer tt.cleanupEnv()
+
+			// Create a fake failing transport
+			slowServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(`{"error":"not_found"}`))
+			}))
+			defer slowServer.Close()
+
+			registry := adapter.NewRegistry()
+			httpHelper := adapter.NewHTTPHelper(registry.GetHTTPClient())
+			
+			switch tt.channelType {
+			case "slack":
+				registry.Register("slack", adapter.NewSlackAdapter(httpHelper))
+			case "telegram":
+				registry.Register("telegram", adapter.NewTelegramAdapter(httpHelper))
+			case "webhook":
+				registry.Register("webhook", adapter.NewWebhookAdapter(httpHelper))
+			}
+
+			handler := NewHandler(tt.config, registry)
+
+			body := `{"need":"test","blocker":"test","action":"test","fallback":"test"}`
+			req := httptest.NewRequest("POST", "/v1/human-call", bytes.NewReader([]byte(body)))
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			// Should return an error (not 200)
+			if w.Code == http.StatusOK {
+				t.Errorf("expected error status, got 200")
+			}
+
+			var resp ErrorResponse
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			// Check that error message doesn't contain forbidden strings
+			errorMessage := resp.Error.Message
+			for _, forbidden := range tt.forbiddenStrings {
+				if strings.Contains(errorMessage, forbidden) {
+					t.Errorf("error message contains forbidden string %q: %s", forbidden, errorMessage)
+				}
+			}
+
+			// Error message should be generic
+			if errorMessage == "" {
+				t.Errorf("error message should not be empty")
+			}
+		})
+	}
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }

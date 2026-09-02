@@ -53,11 +53,11 @@ func (a *FeishuAdapter) Send(ctx context.Context, channelConfig ChannelConfig, p
 		if IsTimeoutError(err) {
 			return SendResult{}, err
 		}
-		return SendResult{}, NewTransportError(fmt.Sprintf("Feishu webhook request failed: %v", err), err)
+		return SendResult{}, NewTransportError("Feishu webhook request failed", nil)
 	}
 
 	if statusCode < 200 || statusCode >= 300 {
-		return SendResult{}, NewTransportError(fmt.Sprintf("Feishu API returned %d: %s", statusCode, string(respBody)), nil)
+		return SendResult{}, NewTransportError(fmt.Sprintf("Feishu API returned %d", statusCode), nil)
 	}
 
 	var feishuResp struct {
@@ -74,7 +74,7 @@ func (a *FeishuAdapter) Send(ctx context.Context, channelConfig ChannelConfig, p
 	}
 
 	if feishuResp.Code != 0 {
-		return SendResult{}, NewTransportError(fmt.Sprintf("Feishu API returned code=%d: %s", feishuResp.Code, feishuResp.Msg), nil)
+		return SendResult{}, NewTransportError(fmt.Sprintf("Feishu API returned code=%d", feishuResp.Code), nil)
 	}
 
 	return SendResult{

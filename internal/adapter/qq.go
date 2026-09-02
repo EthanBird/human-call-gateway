@@ -67,11 +67,11 @@ func (a *QQAdapter) Send(ctx context.Context, channelConfig ChannelConfig, paylo
 		if IsTimeoutError(err) {
 			return SendResult{}, err
 		}
-		return SendResult{}, NewTransportError(fmt.Sprintf("QQ API request failed: %v", err), err)
+		return SendResult{}, NewTransportError("QQ API request failed", nil)
 	}
 
 	if statusCode < 200 || statusCode >= 300 {
-		return SendResult{}, NewTransportError(fmt.Sprintf("QQ API returned %d: %s", statusCode, string(respBody)), nil)
+		return SendResult{}, NewTransportError(fmt.Sprintf("QQ API returned %d", statusCode), nil)
 	}
 
 	var qqResp struct {
@@ -83,11 +83,11 @@ func (a *QQAdapter) Send(ctx context.Context, channelConfig ChannelConfig, paylo
 	}
 
 	if err := json.Unmarshal(respBody, &qqResp); err != nil {
-		return SendResult{}, NewTransportError("Failed to parse QQ response", err)
+		return SendResult{}, NewTransportError("Failed to parse QQ response", nil)
 	}
 
 	if qqResp.Status != "ok" || qqResp.RetCode != 0 {
-		return SendResult{}, NewTransportError(fmt.Sprintf("QQ API returned status=%s retcode=%d: %s", qqResp.Status, qqResp.RetCode, string(respBody)), nil)
+		return SendResult{}, NewTransportError(fmt.Sprintf("QQ API returned status=%s retcode=%d", qqResp.Status, qqResp.RetCode), nil)
 	}
 
 	return SendResult{

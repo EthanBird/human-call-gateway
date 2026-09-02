@@ -50,11 +50,11 @@ func (a *SlackAdapter) Send(ctx context.Context, channelConfig ChannelConfig, pa
 		if IsTimeoutError(err) {
 			return SendResult{}, err
 		}
-		return SendResult{}, NewTransportError(fmt.Sprintf("Slack webhook request failed: %v", err), err)
+		return SendResult{}, NewTransportError("Slack webhook request failed", nil)
 	}
 
 	if statusCode < 200 || statusCode >= 300 {
-		return SendResult{}, NewTransportError(fmt.Sprintf("Slack API returned %d: %s", statusCode, string(respBody)), nil)
+		return SendResult{}, NewTransportError(fmt.Sprintf("Slack API returned %d", statusCode), nil)
 	}
 
 	// Slack webhook returns "ok" on success, but doesn't provide a message ID
