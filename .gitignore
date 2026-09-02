@@ -7,3 +7,7 @@
 credentials.json
 secrets/
 .secrets/
+
+# Gateway config and binaries
+config.yaml
+/gateway
