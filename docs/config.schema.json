@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EthanBird/human-call-gateway/config.schema.json",
+  "title": "Human Call Gateway Configuration",
+  "description": "Configuration schema for the Human Call Gateway. All transports are URL + headers + body mappings (no vendor SDKs). Secrets are env var NAMES, never literal secret values. Adding a channel type = one mapper + this schema fragment + register type.",
+  "type": "object",
+  "required": [
+    "channels"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "default_channel_id": {
+      "type": "string",
+      "description": "Default channel to use when channel_id is omitted from the request. Must match an existing channel id."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "description": "HTTP client timeout in milliseconds. Default: 10000 (10 seconds).",
+      "default": 10000,
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "channels": {
+      "type": "array",
+      "description": "List of configured notification channels. Each channel must have a unique id.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/channel"
+      }
+    }
+  },
+  "$defs": {
+    "channel": {
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this channel. Used in API requests to select this channel.",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "description": "Channel transport type.",
+          "enum": [
+            "slack",
+            "telegram",
+            "feishu",
+            "qq",
+            "webhook"
+          ]
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this channel is enabled. Default: true.",
+          "default": true
+        },
+        "slack": {
+          "$ref": "#/$defs/slack_config"
+        },
+        "telegram": {
+          "$ref": "#/$defs/telegram_config"
+        },
+        "feishu": {
+          "$ref": "#/$defs/feishu_config"
+        },
+        "qq": {
+          "$ref": "#/$defs/qq_config"
+        },
+        "webhook": {
+          "$ref": "#/$defs/webhook_config"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "slack"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "slack"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "telegram"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "telegram"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "feishu"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "feishu"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "qq"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "qq"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "webhook"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "webhook"
+            ]
+          }
+        }
+      ]
+    },
+    "slack_config": {
+      "type": "object",
+      "description": "Slack Incoming Webhook configuration. Uses Slack's Incoming Webhooks feature.",
+      "required": [
+        "webhook_url_env"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "webhook_url_env": {
+          "type": "string",
+          "description": "Environment variable name holding the Slack Incoming Webhook URL. The webhook URL is a secret and must not appear in this config or in logs.",
+          "minLength": 1,
+          "example": "SLACK_WEBHOOK_URL"
+        }
+      }
+    },
+    "telegram_config": {
+      "type": "object",
+      "description": "Telegram Bot API configuration. Sends messages via Telegram Bot API.",
+      "required": [
+        "bot_token_env",
+        "chat_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "bot_token_env": {
+          "type": "string",
+          "description": "Environment variable name holding the Telegram bot token. The token is a secret and must not appear in this config or in logs.",
+          "minLength": 1,
+          "example": "TELEGRAM_BOT_TOKEN"
+        },
+        "chat_id": {
+          "type": "string",
+          "description": "Telegram chat ID (can be a user ID, group ID, or channel ID). Must include '-' prefix for groups and channels.",
+          "minLength": 1,
+          "example": "-1001234567890"
+        },
+        "api_base_url": {
+          "type": "string",
+          "description": "Telegram Bot API base URL. Default: https://api.telegram.org",
+          "format": "uri",
+          "default": "https://api.telegram.org",
+          "example": "https://api.telegram.org"
+        }
+      }
+    },
+    "feishu_config": {
+      "type": "object",
+      "description": "Feishu/Lark bot webhook configuration. Uses Feishu's custom bot webhooks.",
+      "required": [
+        "webhook_url_env"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "webhook_url_env": {
+          "type": "string",
+          "description": "Environment variable name holding the Feishu bot webhook URL. The webhook URL is a secret and must not appear in this config or in logs.",
+          "minLength": 1,
+          "example": "FEISHU_WEBHOOK_URL"
+        }
+      }
+    },
+    "qq_config": {
+      "type": "object",
+      "description": "QQ (go-cqhttp / OneBot) configuration. Requires at least one of user_id or group_id. Uses OneBot HTTP API standard.",
+      "required": [
+        "http_api_url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "http_api_url": {
+          "type": "string",
+          "description": "go-cqhttp / OneBot HTTP API endpoint URL (e.g., http://127.0.0.1:5700/send_msg).",
+          "format": "uri",
+          "example": "http://127.0.0.1:5700/send_msg"
+        },
+        "access_token_env": {
+          "type": "string",
+          "description": "Optional environment variable name holding the OneBot access token. The token is a secret and must not appear in this config or in logs.",
+          "example": "QQ_ACCESS_TOKEN"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "QQ user ID for private message. Either user_id or group_id must be set.",
+          "example": "123456789"
+        },
+        "group_id": {
+          "type": "string",
+          "description": "QQ group ID for group message. Either user_id or group_id must be set.",
+          "example": "987654321"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "user_id"
+          ]
+        },
+        {
+          "required": [
+            "group_id"
+          ]
+        }
+      ]
+    },
+    "webhook_config": {
+      "type": "object",
+      "description": "Generic webhook configuration. Sends POST requests to arbitrary URLs. Header values that are secrets should use ${ENV_VAR} placeholders (e.g., Authorization: Bearer ${API_TOKEN}).",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Webhook URL. Use this for non-secret URLs. Either url or url_env must be set.",
+          "format": "uri",
+          "example": "https://example.com/webhook"
+        },
+        "url_env": {
+          "type": "string",
+          "description": "Environment variable name holding the webhook URL. Use this when the URL contains secrets. Either url or url_env must be set.",
+          "minLength": 1,
+          "example": "WEBHOOK_URL"
+        },
+        "method": {
+          "type": "string",
+          "description": "HTTP method. Only POST is supported in v1.",
+          "enum": [
+            "POST"
+          ],
+          "default": "POST"
+        },
+        "headers": {
+          "type": "object",
+          "description": "Additional HTTP headers. Header values can use ${ENV_VAR} placeholders for secrets (e.g., { \"Authorization\": \"Bearer ${API_TOKEN}\" }).",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "example": {
+            "Authorization": "Bearer ${API_TOKEN}",
+            "X-Custom-Header": "value"
+          }
+        },
+        "content_type": {
+          "type": "string",
+          "description": "Content-Type header value. Default: application/json",
+          "default": "application/json",
+          "example": "application/json"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "url"
+          ]
+        },
+        {
+          "required": [
+            "url_env"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,232 @@
+openapi: 3.1.0
+info:
+  title: Human Call Gateway API
+  version: 1.0.0
+  description: |
+    Configurable send-only gateway for Slack / Telegram / Feishu / QQ / generic Webhook.
+    
+    Semantics are sent-only: confirm the message left the gateway, never wait for a human, never return human_result.
+    
+    The server returns as soon as the transport completes or times out; it does not poll, retry-on-human, or hold the request for a reply.
+
+servers:
+  - url: /v1
+    description: v1 API
+
+paths:
+  /human-call:
+    post:
+      summary: Send a human call message
+      description: |
+        Send a structured human call message through a configured channel.
+        
+        Returns immediately after the transport accepts or rejects the send.
+        Does not wait for human response or retry on failure.
+      operationId: sendHumanCall
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HumanCallRequest'
+            examples:
+              basic:
+                summary: Basic human call
+                value:
+                  need: "需要前端工程师"
+                  blocker: "API 返回格式变更导致页面白屏"
+                  action: "请修复 /api/users 接口的响应处理"
+                  fallback: "暂时使用旧版本回滚"
+              urgent:
+                summary: Urgent call with specific channel
+                value:
+                  need: "需要 DBA"
+                  blocker: "生产数据库连接池耗尽"
+                  action: "请紧急扩容数据库连接数"
+                  fallback: "触发自动降级，关闭非核心功能"
+                  channel_id: "prod-alerts"
+                  urgent: true
+      responses:
+        '200':
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              examples:
+                slack:
+                  summary: Slack message sent
+                  value:
+                    sent: true
+                    id: "1234567890.123456"
+                telegram:
+                  summary: Telegram message sent
+                  value:
+                    sent: true
+                    id: "12345"
+                webhook:
+                  summary: Webhook delivered (no transport id)
+                  value:
+                    sent: true
+                    id: "gw-20260902-074100-abc123"
+        '400':
+          description: Invalid payload or missing configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_payload:
+                  summary: Missing required field
+                  value:
+                    sent: false
+                    error:
+                      code: INVALID_PAYLOAD
+                      message: "Field 'need' is required and must be non-empty"
+                config_missing:
+                  summary: Channel not configured
+                  value:
+                    sent: false
+                    error:
+                      code: CONFIG_MISSING
+                      message: "Channel 'prod-alerts' not found in configuration"
+        '502':
+          description: Transport error (upstream failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                transport_error:
+                  summary: Slack API returned error
+                  value:
+                    sent: false
+                    error:
+                      code: TRANSPORT_ERROR
+                      message: "Slack API returned 404: channel_not_found"
+        '504':
+          description: Timeout (exceeded 10s)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                timeout:
+                  summary: Request timeout
+                  value:
+                    sent: false
+                    error:
+                      code: TIMEOUT
+                      message: "HTTP client exceeded 10s timeout"
+
+components:
+  schemas:
+    HumanCallRequest:
+      type: object
+      required:
+        - need
+        - blocker
+        - action
+        - fallback
+      additionalProperties: false
+      properties:
+        need:
+          type: string
+          description: "「需要人」 one line describing who is needed"
+          minLength: 1
+          maxLength: 500
+          example: "需要后端工程师"
+        blocker:
+          type: string
+          description: "「卡在」 the blocker preventing progress"
+          minLength: 1
+          maxLength: 500
+          example: "数据库查询超时导致服务不可用"
+        action:
+          type: string
+          description: "「请你」 the exact human action requested"
+          minLength: 1
+          maxLength: 500
+          example: "请优化 users 表的慢查询"
+        fallback:
+          type: string
+          description: "「不做也能」 what happens if nobody answers"
+          minLength: 1
+          maxLength: 500
+          example: "系统自动切换到只读模式"
+        channel_id:
+          type: string
+          description: |
+            Send via this configured channel.
+            Omit to use config.default_channel_id.
+          example: "dev-alerts"
+        urgent:
+          type: boolean
+          description: |
+            Only set when work is actually stopped.
+            Default: false
+          default: false
+          example: true
+    
+    SuccessResponse:
+      type: object
+      required:
+        - sent
+        - id
+      additionalProperties: false
+      properties:
+        sent:
+          type: boolean
+          description: |
+            Always true for 200 responses.
+            Means the transport accepted the send, not that a human read it.
+          enum:
+            - true
+          example: true
+        id:
+          type: string
+          description: |
+            Transport message ID, or gateway-generated ID if transport has none.
+            Never includes human_result.
+          example: "1234567890.123456"
+    
+    ErrorResponse:
+      type: object
+      required:
+        - sent
+        - error
+      additionalProperties: false
+      properties:
+        sent:
+          type: boolean
+          description: Always false for error responses.
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          required:
+            - code
+            - message
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              description: |
+                Error code:
+                - INVALID_PAYLOAD: missing/empty/too-long fields, unknown JSON keys, wrong types (400)
+                - CONFIG_MISSING: channel_id unknown, default_channel_id unset when channel_id omitted, channel disabled, type missing required config/secret env (400)
+                - TRANSPORT_ERROR: upstream non-success (4xx/5xx from Slack/Telegram/etc.) or malformed transport response (502)
+                - TIMEOUT: shared HTTP client exceeded 10s (504)
+              enum:
+                - INVALID_PAYLOAD
+                - CONFIG_MISSING
+                - TRANSPORT_ERROR
+                - TIMEOUT
+              example: INVALID_PAYLOAD
+            message:
+              type: string
+              description: |
+                Operator-facing error message.
+                Must never echo tokens, webhook URLs with secrets, or env values.
+              example: "Field 'need' is required and must be non-empty"
